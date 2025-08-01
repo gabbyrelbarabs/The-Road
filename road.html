@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Road</title>
+  <link rel="shortcut icon" type="x-icon" href="road.ico" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; }
+	
+  #title-screen {
+    position: fixed;
+    top:0; left:0; width:100%; height:100%;
+    background: url('road.jpg') center/cover no-repeat;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+	font-family: "Century", Century;
+  }
+  #title-screen h1 {
+    font-size: 4rem;
+    color: #fff;
+    margin-bottom: 1rem;
+  }
+  #title-screen p {
+	font-size: 1rem;
+    color: #fff;
+    margin-bottom: 1rem;
+  }
+  #title-screen button {
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+    /* BACKGROUND LAYERS */
+    #game {
+      position: relative;
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      background: url('day.png') no-repeat center center;
+      background-size: cover;
+      display: flex; justify-content: center; align-items: center;
+      flex-direction: column;
+      z-index: 105;
+    }
+    @keyframes landMove {
+      from { background-position-x: 0; }
+      to   { background-position-x: -100%; }
+    }
+    @keyframes roadMove {
+      from { background-position-x: 0; }
+      to   { background-position-x: -100%; }
+    }
+
+    /* FOREGROUND */
+    #foreground {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: url('foreground.png') no-repeat center center;
+      background-size: cover;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* NIGHT TINT & FLASHLIGHT */
+    #night-tint {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 98;
+      display: none;
+      background-color: rgba(0,0,0,0.5);
+      background-image:
+        radial-gradient(
+          circle at var(--cursorX,50%) var(--cursorY,50%),
+          transparent 100px,
+          rgba(0,0,0,0.7) 200px
+        );
+      transition: background-position 0.1s, background-image 0.1s;
+    }
+
+    /* TRANSITION FADE */
+    #transition-overlay {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #000; opacity: 0;
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+      transition: opacity 0.5s ease;
+    }
+
+    /* STATS */
+    #stats {
+      position: absolute; top: 10px; left: 10px;
+      background: rgba(255,255,255,0.8);
+      padding: 8px 12px; border-radius: 6px;
+      list-style: none;
+      z-index: 10;
+    }
+    #stats li { margin: 4px 0; }
+
+    /* MONSTER */
+    #monster {
+      position: absolute;
+	  top: 50%;
+	  left: 50%;
+	  transform: translate(-50%, -50%) scale(1);
+	  width: 90px;
+	  height: 165px;
+	  border-radius: 50%;
+	  background: transparent;
+	  filter: blur(20px);
+	  display: none;
+	  pointer-events: none;
+	  z-index: 4;
+    }
+
+    /* SANITY OVERLAY */
+    #overlay {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* CONTROLS */
+    #controls {
+      position: absolute; bottom: 20px;
+      display: flex; gap: 8px;
+      z-index: 10;
+    }
+    #controls button {
+      padding: 8px 14px; border: none;
+      border-radius: 4px; cursor: pointer;
+    }
+
+    /* DEATH MENU */
+    #death-menu {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    #death-menu h1 { margin-bottom: 16px; }
+    #death-menu button {
+      margin-top: 20px; padding: 10px 20px; font-size: 1rem;
+    }
+	@keyframes shake {
+      0%   { transform: translate(0, 0); }
+      25%  { transform: translate(var(--dx), var(--dy)); }
+      50%  { transform: translate(calc(var(--dx) * -1), calc(var(--dy) * -1)); }
+      75%  { transform: translate(var(--dx), var(--dy)); }
+      100% { transform: translate(0, 0); }
+	}
+	body.shake {
+		animation: shake var(--shake-duration) infinite ease-in-out;
+	}
+  </style>
+</head>
+<body>
+  <div id="title-screen">
+    <h1>The Road</h1>
+	<p>You're not alone.</p>
+	<br>
+    <button id="btn-play">Play</button>
+  </div>
+  <audio id="audio-wind" src="Wind.mp3" loop preload="auto"></audio>
+  <audio id="audio-night" src="Night.mp3" loop preload="auto"></audio>
+  
+  <div id="game">
+    <div id="land"></div>
+    <div id="road"></div>
+    <div id="foreground"></div>
+    <div id="night-tint"></div>
+    <div id="transition-overlay"></div>
+
+    <ul id="stats">
+	  <li id="stat-days">Days: 0</li>
+	  <br>
+      <li id="stat-distance">Distance: 0 km</li>
+      <li id="stat-time">Time: morning</li>
+      <li id="stat-energy">Energy: 100</li>
+      <li id="stat-sanity">Sanity: 0</li>
+    </ul>
+
+    <div id="monster"></div>
+    <div id="overlay"></div>
+
+    <div id="controls">
+      <button onclick="doAction('walk')">Walk</button>
+      <button onclick="doAction('run')">Run</button>
+      <button onclick="doAction('back')">Back</button>
+      <button onclick="doAction('sleep')">Sleep</button>
+      <button onclick="doAction('investigate')">Investigate</button>
+      <button onclick="doAction('stare')">Stare</button>
+    </div>
+
+    <div id="death-menu">
+      <h1>You died!</h1>
+      <p id="death-total">Total Distance Travelled: 0 km</p>
+      <p id="death-final">Final Distance Travelled: 0 km</p>
+      <p id="death-days">Days Survived: 0</p>
+      <button onclick="location.reload()">Retry</button>
+    </div>
+  </div>
+
+  <script>
+    // CORE STATE
+    const stats = {
+      distance: 0,
+      timeIdx: 0,
+      times: ['morning','noon','evening','night','midnight','predawn','daybreak'],
+      energy: 100,
+      sanity: 0,
+      days: 0,
+      sleepStreak: 0,
+      nightStreak: 0,
+      lastGroup: null,
+      sameCount: 0,
+      extraEnergyCost: 0,
+      extraSanityGain: 0,
+      monster: null,
+      areaInvestigated: false
+    };
+
+    // DOM REFS
+    const DOM = {
+      dist: document.getElementById('stat-distance'),
+      time: document.getElementById('stat-time'),
+      energy: document.getElementById('stat-energy'),
+      sanity: document.getElementById('stat-sanity'),
+      days: document.getElementById('stat-days'),
+      game: document.getElementById('game'),
+      land: document.getElementById('land'),
+      road: document.getElementById('road'),
+      monster: document.getElementById('monster'),
+      overlay: document.getElementById('overlay'),
+      nightTint: document.getElementById('night-tint'),
+      transition: document.getElementById('transition-overlay'),
+      controls: document.querySelectorAll('#controls button')
+    };
+
+    let passiveTimer;
+
+    function rnd(min, max) { return Math.random() * (max - min) + min; }
+    function clamp(v, min, max) { return v < min ? min : v > max ? max : v; }
+
+    // ADVANCE TIME & SPAWN MONSTER
+    function nextTime() {
+      stats.timeIdx = (stats.timeIdx + 1) % stats.times.length;
+      if (stats.timeIdx === 0) {
+        stats.days++;
+        stats.areaInvestigated = false;
+        if (stats.sleepStreak === 0) {
+          stats.nightStreak++;
+          stats.sanity = clamp(stats.sanity + stats.nightStreak, 0, 100);
+        } else {
+          stats.nightStreak = 0;
+        }
+        stats.sleepStreak = 0;
+      }
+      spawnMonster();
+      updateUI();
+    }
+
+    function spawnMonster() {
+      if (stats.monster) return;
+	  
+	  let base = stats.sanity >= 75 ? 0.3 : stats.sanity >= 50 ? 0.2 : stats.sanity >= 25 ? 0.15 : 0.1;
+	  const t       = stats.times;
+	  const idx     = stats.timeIdx;
+	  const night   = t.indexOf('night');
+	  const predawn = t.indexOf('predawn');
+	  const isNight = idx >= night && idx <= predawn;
+
+	  if (Math.random() < base + (isNight ? base : 0)) { 
+		const cols = ['#3d3d3d','#777777','#c2c2c2','#0d0d0d'];
+		const col  = cols[Math.floor(rnd(0, cols.length))];
+		stats.monster = col;
+
+		DOM.monster.style.backgroundImage =
+		  `radial-gradient(
+			circle at center,
+			${col} 0%,
+			${col} 40%,
+			rgba(0,0,0,0) 100%
+		  )`;
+
+		const topPct  = rnd(50, 70).toFixed(1);
+		const leftPct = rnd(30, 70).toFixed(1);
+		DOM.monster.style.top  = `${topPct}%`;
+		DOM.monster.style.left = `${leftPct}%`;
+		const scale = rnd(0.8, 1.5).toFixed(2);
+		DOM.monster.style.transform = `translate(-50%, -50%) scale(${scale})`;
+
+		DOM.monster.style.display = 'block';
+	  }
+    }
+
+    // PASSIVE EFFECTS
+    function resetPassive() {
+      clearInterval(passiveTimer);
+      passiveTimer = setInterval(() => {
+        stats.sanity = clamp(stats.sanity + 0.2, 0, 100);
+        stats.energy = clamp(stats.energy - 0.1, 0, 100);
+        updateUI();
+      }, 1200);
+    }
+
+    // REPEAT-ACTION MODIFIERS
+    function applyRepeatMods(action) {
+      const group = ['walk','run','back'].includes(action) ? 'move' : action;
+      if (stats.lastGroup === group) stats.sameCount++;
+      else {
+        stats.lastGroup = group;
+        stats.sameCount = 1;
+        stats.extraEnergyCost = 0;
+        stats.extraSanityGain = 0;
+      }
+      if (stats.sameCount >= 3) {
+        const thresh = stats.sameCount < 5 ? 3
+                     : stats.sameCount < 9 ? 2
+                     : 1;
+        if (stats.sameCount % thresh === 0) {
+          stats.extraEnergyCost++;
+          stats.extraSanityGain++;
+        }
+      }
+    }
+
+    // RESOLVE MONSTER ENCOUNTER
+    function resolveMonster(action) {
+      const col = stats.monster, t = stats.times, idx = stats.timeIdx;
+      let died = false, escaped = false;
+      if (col === '#3d3d3d')      { escaped = action === 'sleep'; died = !escaped }
+      else if (col === '#777777') { escaped = action === 'run'; died = !escaped && action !== 'back'; }
+      else if (col === '#c2c2c2') { escaped = action === 'stare'; died = !escaped; }
+      else if (col === '#0d0d0d') { escaped = action === 'back'; died = !escaped; }
+
+      if (died) {
+        alert('You were killed.');
+        showDeathMenu();
+      } else if (escaped) {
+        stats.monster = null;
+        DOM.monster.style.display = 'none';
+        alert('You avoided it!');
+      }
+    }
+
+    // ENABLE/DISABLE CONTROLS
+    function disableControls() { DOM.controls.forEach(b => b.disabled = true); }
+    function enableControls()  { DOM.controls.forEach(b => b.disabled = false); }
+
+    // MAIN ACTION LOGIC
+    function doDoAction(action) {
+      resetPassive();
+      if (stats.monster) {
+        resolveMonster(action);
+        updateUI();
+        return;
+      }
+      applyRepeatMods(action);
+      const t = stats.times, idx = stats.timeIdx;
+      const nightStart = t.indexOf('night'), predawn = t.indexOf('predawn');
+      const isNight = idx >= nightStart && idx <= predawn;
+      const nightMult = isNight ? 2 : 1;
+
+      let d = 0, e = 0, s = 0;
+      switch (action) {
+        case 'walk':
+          d = rnd(0.5,2);
+          e = (3 + stats.extraEnergyCost) * nightMult;
+          s = (rnd(2,3) + stats.extraSanityGain) * nightMult;
+          nextTime();
+          break;
+        case 'run':
+          d = rnd(1.5,4);
+          e = (10 + stats.extraEnergyCost) * nightMult;
+          s = (rnd(3,6) + stats.extraSanityGain) * nightMult;
+          nextTime();
+          break;
+        case 'back':
+          d = -rnd(0.5,2);
+          e = (3 + stats.extraEnergyCost) * nightMult;
+          s = (rnd(3,4) + stats.extraSanityGain) * nightMult;
+          nextTime();
+          break;
+        case 'sleep':
+          const label = t[idx];
+          const morningIdx = t.indexOf('morning');
+          const noonIdx    = t.indexOf('noon');
+          const predawnIdx = t.indexOf('predawn');
+
+          if (['night','midnight','predawn'].includes(label)) {
+            stats.timeIdx = morningIdx;
+          } else if (label === 'daybreak') {
+            stats.timeIdx = Math.random() < 0.5 ? noonIdx : morningIdx;
+          } else if (label === 'evening') {
+            stats.timeIdx = Math.random() < 0.5 ? predawnIdx : idx;
+          } else {
+            nextTime();
+          }
+
+          stats.sleepStreak++;
+          stats.energy = clamp(stats.energy + rnd(10,20), 0, 100);
+          stats.sanity = clamp(stats.sanity - rnd(10,20), 0, 100);
+          break;
+
+        case 'investigate':
+          if (stats.areaInvestigated) { alert('Nothing here...'); break; }
+          stats.areaInvestigated = true;
+          e = (10 + stats.extraEnergyCost) * nightMult;
+          s = (rnd(2,4) + stats.extraSanityGain) * nightMult;
+          const ev = rnd(0,100);
+          if      (ev < 2) { alert('You died due to unknown causes.'); return showDeathMenu(); }
+          else if (ev < 9) { spawnMonster(); }
+          else if (ev < 16){ stats.energy += 5; stats.sanity -= rnd(1,2); alert('You found food.'); }
+          else if (ev < 37){ stats.sanity -= rnd(1,2); alert('You found water.'); }
+          else             { alert('Nothing here...'); }
+          break;
+
+        case 'stare':
+          e = rnd(0,2) * nightMult;
+          s = (rnd(1,3) + stats.extraSanityGain) * nightMult;
+          nextTime();
+          break;
+      }
+
+      stats.distance += d;
+      stats.energy   = clamp(stats.energy - e, 0, 100);
+      stats.sanity   = clamp(stats.sanity + s, 0, 100);
+      updateUI();
+    }
+
+    // WRAP ACTIONS WITH FADE
+    function doAction(action) {
+      if (['walk','run','back','sleep'].includes(action) || (['investigate', 'stare'].includes(action) && stats.monster)) {
+        disableControls();
+        DOM.transition.style.display = 'block';
+        requestAnimationFrame(() => { DOM.transition.style.opacity = '1'; });
+        setTimeout(() => {
+          doDoAction(action);
+          DOM.transition.style.opacity = '0';
+          setTimeout(() => {
+            DOM.transition.style.display = 'none';
+            enableControls();
+          }, 500);
+        }, 1000);
+      } else {
+        doDoAction(action);
+      }
+    }
+
+    // UPDATE UI
+    function updateUI() {
+      DOM.dist.textContent   = `Distance: ${stats.distance.toFixed(1)} km`;
+      DOM.time.textContent   = `Time: ${stats.times[stats.timeIdx]}`;
+      DOM.energy.textContent = `Energy: ${Math.round(stats.energy)}`;
+      DOM.sanity.textContent = `Sanity: ${Math.round(stats.sanity)}`;
+      DOM.days.textContent   = `Days: ${stats.days}`;
+
+      // Background by time
+      const imgs = {
+        morning: 'day.png',   noon:    'day.png',
+        evening: 'evening.png', daybreak: 'evening.png',
+        night:   'night.png', midnight:  'night.png', predawn: 'night.png'
+      };
+      const t = stats.times[stats.timeIdx];
+      DOM.game.style.backgroundImage = `url('${imgs[t]}')`;
+
+      const s = stats.sanity;
+      const intensity = 1.2;
+      const adjSanity = clamp(s * intensity, 0, 100);
+      const radius    = 100 - adjSanity;
+      const opa       = (adjSanity / 100) * 0.8;
+      DOM.overlay.style.background =
+		`radial-gradient(circle at center, rgba(0,0,0,0) ${radius}%, rgba(0,0,0,${opa}) 100%)`;
+	  
+	const shakeThreshold = 75;
+if (stats.sanity > shakeThreshold) {
+  const norm = (stats.sanity - shakeThreshold) / (100 - shakeThreshold);
+  const minTranslate = 1;
+  const maxTranslate = 4;
+  const amp = minTranslate + norm * (maxTranslate - minTranslate);
+  const baseFreqX = 1, extraFreqX = 4;
+  const baseFreqY = 1, extraFreqY = 4;
+  const freqX = baseFreqX + norm * extraFreqX;
+  const freqY = baseFreqY + norm * extraFreqY;
+  const t = performance.now() / 1000;
+  const dx = Math.sin(t * freqX) * amp;
+  const dy = Math.cos(t * freqY) * amp;
+  const duration = (1 / ((freqX + freqY) / 2)) + 's';
+  document.body.classList.add('shake');
+  document.body.style.setProperty('--dx', `${dx}px`);
+  document.body.style.setProperty('--dy', `${dy}px`);
+  document.body.style.setProperty('--shake-duration', duration);
+} else {
+  document.body.classList.remove('shake');
+}
+
+      // Night tint
+      const idx = stats.timeIdx;
+      const nightStart = stats.times.indexOf('night');
+      const predawnIdx = stats.times.indexOf('predawn');
+      const isNight    = idx >= nightStart && idx <= predawnIdx;
+      DOM.nightTint.style.display = isNight ? 'block' : 'none';
+    }
+
+    // DEATH MENU
+    function showDeathMenu() {
+	  document.body.classList.remove('shake');
+      document.getElementById('death-total').textContent =
+        `Total Distance Travelled: ${stats.distance.toFixed(1)} km`;
+      document.getElementById('death-final').textContent =
+        `Final Distance Travelled: ${stats.distance.toFixed(1)} km`;
+      document.getElementById('death-days').textContent =
+        `Days Survived: ${stats.days}`;
+      disableControls();
+      clearInterval(passiveTimer);
+      document.getElementById('death-menu').style.display = 'flex';
+    }
+
+    // FLASHLIGHT FOLLOW MOUSE
+    document.addEventListener('mousemove', e => {
+      const idx = stats.timeIdx;
+      const nightStart = stats.times.indexOf('night');
+      const predawnIdx = stats.times.indexOf('predawn');
+      const isNight = idx >= nightStart && idx <= predawnIdx;
+      if (isNight) {
+        DOM.nightTint.style.setProperty('--cursorX', `${e.clientX}px`);
+        DOM.nightTint.style.setProperty('--cursorY', `${e.clientY}px`);
+      }
+    });
+	
+	const titleScreen = document.getElementById('title-screen');
+  const btnPlay     = document.getElementById('btn-play');
+  const audioWind   = document.getElementById('audio-wind');
+  const audioNight  = document.getElementById('audio-night');
+
+  audioWind.currentTime = 0;
+
+  btnPlay.addEventListener('click', () => {
+    titleScreen.style.display = 'none';
+    audioWind.play();
+  });
+
+  const origNextTime = nextTime;
+  nextTime = function() {
+    origNextTime();
+    const label = stats.times[stats.timeIdx];
+    if (label === 'night' || label === 'midnight' || label === 'predawn' || label === 'daybreak') {
+      if (!audioNight.paused) return;
+      audioWind.pause();
+      audioNight.currentTime = 0;
+      audioNight.play();
+    } else if (label === 'morning' || label === 'noon' || label === 'evening') {
+      if (!audioWind.paused) return;
+      audioNight.pause();
+      audioWind.currentTime = 0;
+      audioWind.play();
+    }
+  };
+
+    // INIT
+    updateUI();
+    resetPassive();
+  </script>
+</body>
+</html>
