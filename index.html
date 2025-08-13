@@ -176,7 +176,7 @@
     <button id="btn-play">Play</button>
   </div>
   <audio id="audio-wind" src="Wind.mp3" loop preload="auto"></audio>
-  <audio id="audio-night" src="Night.mp3" loop preload="auto"></audio>
+  <audio id="audio-night" src="night.mp3" loop preload="auto"></audio>
   
   <div id="game">
     <div id="land"></div>
@@ -216,7 +216,6 @@
   </div>
 
   <script>
-    // CORE STATE
     const stats = {
       distance: 0,
       timeIdx: 0,
@@ -256,7 +255,6 @@
     function rnd(min, max) { return Math.random() * (max - min) + min; }
     function clamp(v, min, max) { return v < min ? min : v > max ? max : v; }
 
-    // ADVANCE TIME & SPAWN MONSTER
     function nextTime() {
       stats.timeIdx = (stats.timeIdx + 1) % stats.times.length;
       if (stats.timeIdx === 0) {
@@ -308,7 +306,6 @@
 	  }
     }
 
-    // PASSIVE EFFECTS
     function resetPassive() {
       clearInterval(passiveTimer);
       passiveTimer = setInterval(() => {
@@ -318,7 +315,6 @@
       }, 1200);
     }
 
-    // REPEAT-ACTION MODIFIERS
     function applyRepeatMods(action) {
       const group = ['walk','run','back'].includes(action) ? 'move' : action;
       if (stats.lastGroup === group) stats.sameCount++;
@@ -339,7 +335,6 @@
       }
     }
 
-    // RESOLVE MONSTER ENCOUNTER
     function resolveMonster(action) {
       const col = stats.monster, t = stats.times, idx = stats.timeIdx;
       let died = false, escaped = false;
@@ -358,11 +353,9 @@
       }
     }
 
-    // ENABLE/DISABLE CONTROLS
     function disableControls() { DOM.controls.forEach(b => b.disabled = true); }
     function enableControls()  { DOM.controls.forEach(b => b.disabled = false); }
 
-    // MAIN ACTION LOGIC
     function doDoAction(action) {
       resetPassive();
       if (stats.monster) {
@@ -425,8 +418,8 @@
           const ev = rnd(0,100);
           if      (ev < 2) { alert('You died due to unknown causes.'); return showDeathMenu(); }
           else if (ev < 9) { spawnMonster(); }
-          else if (ev < 16){ stats.energy += 5; stats.sanity -= rnd(1,2); alert('You found food.'); }
-          else if (ev < 37){ stats.sanity -= rnd(1,2); alert('You found water.'); }
+          else if (ev < 16){ stats.energy += 10; stats.sanity -= rnd(1,2); alert('You found food.'); }
+          else if (ev < 37){ stats.sanity -= rnd(3,5); alert('You found water.'); }
           else             { alert('Nothing here...'); }
           break;
 
@@ -445,7 +438,7 @@
 
     // WRAP ACTIONS WITH FADE
     function doAction(action) {
-      if (['walk','run','back','sleep'].includes(action) || (['investigate', 'stare'].includes(action) && stats.monster)) {
+      if (['walk','run','back','sleep', 'investigate', 'stare'].includes(action)) {
         disableControls();
         DOM.transition.style.display = 'block';
         requestAnimationFrame(() => { DOM.transition.style.opacity = '1'; });
